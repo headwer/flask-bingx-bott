@@ -1,0 +1,111 @@
+/* Custom styles for TradingView BingX Webhook System */
+
+/* Code blocks with better readability */
+pre {
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+/* Status badges with better spacing */
+.badge {
+    font-weight: normal;
+}
+
+/* Card hover effects */
+.card {
+    transition: transform 0.2s ease-in-out;
+    border: 1px solid var(--bs-border-color);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Button animations */
+.btn {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Alert styles */
+.alert {
+    border-radius: 0.5rem;
+}
+
+/* Form improvements */
+.form-control:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+/* Icon spacing */
+.fas, .fab {
+    margin-right: 0.25rem;
+}
+
+/* Copy button feedback */
+.btn-success.copied {
+    animation: pulse 0.5s ease-in-out;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* Status indicators */
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .display-4 {
+        font-size: 2.5rem;
+    }
+    
+    .display-5 {
+        font-size: 2rem;
+    }
+    
+    pre {
+        font-size: 0.75rem;
+        overflow-x: auto;
+    }
+}
+
+/* Loading animation for status checks */
+.loading-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Success/error message styling */
+.alert-dismissible {
+    padding-right: 3rem;
+}
+
+/* Custom scrollbar for code blocks */
+pre::-webkit-scrollbar {
+    height: 8px;
+}
+
+pre::-webkit-scrollbar-track {
+    background: var(--bs-dark);
+}
+
+pre::-webkit-scrollbar-thumb {
+    background: var(--bs-secondary);
+    border-radius: 4px;
+}
+
+pre::-webkit-scrollbar-thumb:hover {
+    background: var(--bs-light);
+}
