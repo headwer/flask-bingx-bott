@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 logger = logging.getLogger(__name__)
 
 class BingXClient:
-    """BingX API client for executing trades"""
+    """BingX Futures API client for executing trades"""
     
     def __init__(self):
         self.api_key = os.getenv("BINGX_API_KEY", "")
@@ -20,7 +20,7 @@ class BingXClient:
             logger.warning("BingX API credentials not found in environment variables")
     
     def _generate_signature(self, params: str) -> str:
-        """Generate HMAC-SHA256 signature for BingX API"""
+        """Generate HMAC-SHA256 signature"""
         return hmac.new(
             self.secret_key.encode('utf-8'),
             params.encode('utf-8'),
@@ -42,7 +42,6 @@ class BingXClient:
         signature = self._generate_signature(query_string)
         params['signature'] = signature
         
-        # Headers
         headers = {
             'X-BX-APIKEY': self.api_key,
             'Content-Type': 'application/json'
@@ -69,13 +68,13 @@ class BingXClient:
             raise
     
     def test_connection(self) -> bool:
-        """Test connection to BingX API"""
+        """Test connection to BingX Futures API"""
         try:
             if not self.api_key or not self.secret_key:
                 return False
             
-            # Test with account info endpoint
-            response = self._make_request('GET', '/openApi/spot/v1/account/balance')
+            # Test with balance endpoint
+            response = self._make_request('GET', '/openApi/swap/v2/user/balance')
             return response.get('code') == 0
             
         except Exception as e:
@@ -83,9 +82,9 @@ class BingXClient:
             return False
     
     def get_account_balance(self) -> dict:
-        """Get account balance"""
+        """Get futures account balance"""
         try:
-            response = self._make_request('GET', '/openApi/spot/v1/account/balance')
+            response = self._make_request('GET', '/openApi/swap/v2/user/balance')
             return {
                 'success': True,
                 'data': response.get('data', [])
@@ -98,24 +97,25 @@ class BingXClient:
     
     def place_market_order(self, symbol: str, side: str, quantity: float) -> dict:
         """
-        Place a market order on BingX
-        
+        Place a market order on BingX Futures
+
         Args:
             symbol: Trading pair (e.g., 'BTC-USDT')
             side: 'BUY' or 'SELL'
-            quantity: Order quantity
+            quantity: Order quantity (float)
         """
         try:
             params = {
                 'symbol': symbol,
                 'side': side,
+                'positionSide': 'BOTH',  # O puedes usar 'LONG' o 'SHORT' si usas hedge mode
                 'type': 'MARKET',
                 'quantity': str(quantity)
             }
             
             logger.info(f"Placing {side} market order: {quantity} {symbol}")
             
-            response = self._make_request('POST', '/openApi/spot/v1/trade/order', params)
+            response = self._make_request('POST', '/openApi/swap/v2/trade/order', params)
             
             if response.get('code') == 0:
                 order_data = response.get('data', {})
@@ -145,14 +145,14 @@ class BingXClient:
             }
     
     def get_symbol_info(self, symbol: str) -> dict:
-        """Get symbol information"""
+        """Get futures symbol information"""
         try:
             params = {'symbol': symbol}
-            response = self._make_request('GET', '/openApi/spot/v1/common/symbols', params)
+            response = self._make_request('GET', '/openApi/swap/v2/market/getAllContracts', params)
             
             if response.get('code') == 0:
-                symbols = response.get('data', {}).get('symbols', [])
-                symbol_info = next((s for s in symbols if s.get('symbol') == symbol), None)
+                contracts = response.get('data', [])
+                symbol_info = next((s for s in contracts if s.get('symbol') == symbol), None)
                 
                 return {
                     'success': True,
