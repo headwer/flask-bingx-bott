@@ -81,7 +81,7 @@ class BingXClient:
             logger.error(f"BingX connection test failed: {str(e)}")
             return False
     
-        def get_account_balance(self) -> dict:
+     def get_account_balance(self) -> dict:
         """Get futures account balance"""
         try:
             response = self._make_request('GET', '/openApi/swap/v2/user/balance')
