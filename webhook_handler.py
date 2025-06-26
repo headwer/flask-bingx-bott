@@ -45,15 +45,23 @@ class WebhookHandler:
 
             # Obtener balance en tiempo real
             account_info = self.bingx_client.get_account_balance()
+            data = account_info.get('data')
+
             if not account_info['success']:
                 return {
                     'success': False,
                     'error': f"Failed to fetch balance: {account_info.get('error', '')}"
                 }
 
+            if not isinstance(data, list):
+                return {
+                    'success': False,
+                    'error': "Invalid response format: expected a list of balances"
+                }
+
             # Buscar saldo USDT disponible
-            usdt_balance = next((item for item in account_info['data'] if item['asset'] == 'USDT'), None)
-            if not usdt_balance or float(usdt_balance['available']) <= 0:
+            usdt_balance = next((item for item in data if item.get('asset') == 'USDT'), None)
+            if not usdt_balance or float(usdt_balance.get('available', 0)) <= 0:
                 return {
                     'success': False,
                     'error': "No USDT balance available to trade."
