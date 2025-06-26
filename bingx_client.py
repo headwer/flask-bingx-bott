@@ -81,30 +81,30 @@ class BingXClient:
             logger.error(f"BingX connection test failed: {str(e)}")
             return False
     
-    def get_account_balance(self) -> dict:
-    """Get futures account balance"""
-    try:
-        response = self._make_request('GET', '/openApi/swap/v2/user/balance')
-        
-        logger.debug(f"Raw balance response: {response}")  # 👈 NUEVA LÍNEA
+        def get_account_balance(self) -> dict:
+        """Get futures account balance"""
+        try:
+            response = self._make_request('GET', '/openApi/swap/v2/user/balance')
 
-        data = response.get('data')
+            logger.debug(f"Raw balance response: {response}")  # 👈 Para inspeccionar el formato
 
-        # Verifica que sea una lista, si no, lanza error
-        if not isinstance(data, list):
-            raise ValueError("Invalid response format: expected a list of balances")
+            data = response.get('data')
 
-        return {
-            'success': True,
-            'data': data
-        }
+            # Validación: asegurarse de que 'data' sea una lista
+            if not isinstance(data, list):
+                raise ValueError("Invalid response format: expected a list of balances")
 
-    except Exception as e:
-        logger.error(f"Error parsing balance: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
+            return {
+                'success': True,
+                'data': data
+            }
+
+        except Exception as e:
+            logger.error(f"Error parsing balance: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
     def place_market_order(self, symbol: str, side: str, quantity: float) -> dict:
         """
