@@ -82,18 +82,31 @@ class BingXClient:
             return False
     
     def get_account_balance(self) -> dict:
-        """Get futures account balance"""
-        try:
-            response = self._make_request('GET', '/openApi/swap/v2/user/balance')
-            return {
-                'success': True,
-                'data': response.get('data', [])
-            }
-        except Exception as e:
-            return {
-                'success': False,
-                'error': str(e)
-            }
+    """Get futures account balance"""
+    try:
+        response = self._make_request('GET', '/openApi/swap/v2/user/balance')
+        
+        # Verifica si data es un diccionario o lista
+        raw_data = response.get('data', {})
+
+        # Algunos endpoints devuelven {"data": {"balances": [...]}} o similar
+        if isinstance(raw_data, dict):
+            balances = raw_data.get('balances') or raw_data.get('assets') or []
+        elif isinstance(raw_data, list):
+            balances = raw_data
+        else:
+            balances = []
+
+        return {
+            'success': True,
+            'data': balances
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
     
     def place_market_order(self, symbol: str, side: str, quantity: float) -> dict:
         """
