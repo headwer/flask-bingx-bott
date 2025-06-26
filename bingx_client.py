@@ -54,7 +54,6 @@ class BingXClient:
 
             logger.debug(f"BingX API request: {method} {url}")
             logger.debug(f"Response status: {response.status_code}")
-
             response.raise_for_status()
             return response.json()
 
@@ -76,31 +75,43 @@ class BingXClient:
             return False
 
     def get_account_balance(self) -> dict:
-        """Get futures account balance"""
+        """Get futures account balance (adapted to new response format)"""
         try:
             response = self._make_request('GET', '/openApi/swap/v2/user/balance')
+            logger.debug(f"Raw balance response: {response}")
 
-            logger.debug(f"Raw balance response: {response}")  # 👈 Para inspección
-
-            data = response.get('data')
-
-            if not isinstance(data, list):
-                raise ValueError("Invalid response format: expected a list of balances")
-
-            return {
-                'success': True,
-                'data': data
-            }
+            if response.get('code') == 0 and 'data' in response:
+                balance_info = response['data'].get('balance', {})
+                return {
+                    'success': True,
+                    'data': [
+                        {
+                            'asset': balance_info.get('asset', 'USDT'),
+                            'available': balance_info.get('availableMargin', '0')
+                        }
+                    ]
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f"Unexpected response: {response}"
+                }
 
         except Exception as e:
-            logger.error(f"Error parsing balance: {str(e)}")
             return {
                 'success': False,
                 'error': str(e)
             }
 
     def place_market_order(self, symbol: str, side: str, quantity: float) -> dict:
-        """Place a market order on BingX Futures"""
+        """
+        Place a market order on BingX Futures
+
+        Args:
+            symbol: Trading pair (e.g., 'BTC-USDT')
+            side: 'BUY' or 'SELL'
+            quantity: Order quantity (float)
+        """
         try:
             params = {
                 'symbol': symbol,
@@ -111,7 +122,6 @@ class BingXClient:
             }
 
             logger.info(f"Placing {side} market order: {quantity} {symbol}")
-
             response = self._make_request('POST', '/openApi/swap/v2/trade/order', params)
 
             if response.get('code') == 0:
@@ -150,7 +160,6 @@ class BingXClient:
             if response.get('code') == 0:
                 contracts = response.get('data', [])
                 symbol_info = next((s for s in contracts if s.get('symbol') == symbol), None)
-
                 return {
                     'success': True,
                     'data': symbol_info
