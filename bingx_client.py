@@ -85,23 +85,10 @@ class BingXClient:
     """Get futures account balance"""
     try:
         response = self._make_request('GET', '/openApi/swap/v2/user/balance')
-        
-        # Verifica si data es un diccionario o lista
-        raw_data = response.get('data', {})
-
-        # Algunos endpoints devuelven {"data": {"balances": [...]}} o similar
-        if isinstance(raw_data, dict):
-            balances = raw_data.get('balances') or raw_data.get('assets') or []
-        elif isinstance(raw_data, list):
-            balances = raw_data
-        else:
-            balances = []
-
         return {
             'success': True,
-            'data': balances
+            'data': response.get('data', [])
         }
-
     except Exception as e:
         return {
             'success': False,
