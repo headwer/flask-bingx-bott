@@ -38,8 +38,8 @@ def webhook():
         
         data = request.json
         
-        # Validate required fields
-        required_fields = ['accion', 'ticker', 'balance']
+        # Validate required fields (ya no exigimos balance)
+        required_fields = ['accion', 'ticker']
         missing_fields = [field for field in required_fields if field not in data]
         
         if missing_fields:
@@ -54,24 +54,10 @@ def webhook():
             logger.error(error_msg)
             return jsonify({'error': error_msg}), 400
         
-        # Validate balance
-        try:
-            balance = float(data['balance'])
-            if balance <= 0:
-                raise ValueError("Balance must be positive")
-        except (ValueError, TypeError) as e:
-            error_msg = f"Invalid balance: {data['balance']}. Must be a positive number"
-            logger.error(error_msg)
-            return jsonify({'error': error_msg}), 400
-        
-        # Calculate quantity
-        quantity = balance / 7
-        
-        # Execute trade
+        # Ejecutar operación (el balance se obtiene desde BingX dentro del handler)
         result = webhook_handler.execute_trade(
             action=action,
-            ticker=data['ticker'],
-            quantity=quantity
+            ticker=data['ticker']
         )
         
         if result['success']:
@@ -82,7 +68,7 @@ def webhook():
                 'order_id': result.get('order_id'),
                 'action': action,
                 'ticker': data['ticker'],
-                'quantity': quantity
+                'quantity': result.get('quantity')
             }), 200
         else:
             logger.error(f"Trade execution failed: {result}")
