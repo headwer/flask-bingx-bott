@@ -18,8 +18,10 @@ class WebhookHandler:
             ticker: Trading pair (e.g., 'BTC-USDT')
             quantity: Optional - calculated automatically from account balance
         """
-
         try:
+            # ✅ Normalizar formato del ticker (ej. BTC-USDT → BTCUSDT)
+            ticker = ticker.replace('-', '').upper()
+
             logger.info(f"Executing trade: {action} {ticker}")
 
             # Validar acción
