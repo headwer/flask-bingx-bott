@@ -90,32 +90,32 @@ def test_webhook_endpoint():
     try:
         action = request.form.get('action')
         ticker = request.form.get('ticker')
-        balance = float(request.form.get('balance'))
-        
-        # Create test payload
-        test_data = {
-            'accion': action,
-            'ticker': ticker,
-            'balance': balance
-        }
-        
+        balance_input = request.form.get('balance')
+
+        if not balance_input:
+            flash("❌ Balance field is required.", 'error')
+            return redirect(url_for('test_webhook'))
+
+        balance = float(balance_input)
         quantity = balance / 7
-        
+
         # Execute trade
         result = webhook_handler.execute_trade(
             action=action.upper(),
             ticker=ticker,
             quantity=quantity
         )
-        
-        if result['success']:
+
+        if isinstance(result, dict) and result.get('success'):
             flash(f"✅ Trade executed successfully! Order ID: {result.get('order_id')}", 'success')
+        elif isinstance(result, dict):
+            flash(f"❌ Trade failed: {result.get('error', 'Unknown error')}", 'error')
         else:
-            flash(f"❌ Trade failed: {result['error']}", 'error')
-            
+            flash(f"❌ Unexpected response: {str(result)}", 'error')
+
     except Exception as e:
         flash(f"❌ Error: {str(e)}", 'error')
-    
+
     return redirect(url_for('test_webhook'))
 
 @app.route('/status')
