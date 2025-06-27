@@ -18,8 +18,10 @@ class WebhookHandler:
             ticker: Trading pair (e.g., 'BTC-USDT')
             quantity: Optional - calculated automatically from account balance
         """
-
         try:
+            # ✅ Convertir a mayúsculas pero conservar el guion
+            ticker = ticker.upper()
+
             logger.info(f"Executing trade: {action} {ticker}")
 
             # Validar acción
@@ -73,7 +75,6 @@ class WebhookHandler:
 
             # Validar símbolo
             symbol_info = self.bingx_client.get_symbol_info(ticker)
-            logger.debug(f"Symbol info for {ticker}: {symbol_info}")
             if not symbol_info['success']:
                 return {
                     'success': False,
@@ -101,11 +102,10 @@ class WebhookHandler:
                     'message': f"Executed {action} order for {rounded_quantity} {ticker}"
                 }
             else:
-                logger.error(f"Market order failed with raw response: {result.get('raw_response')}")
+                logger.error(f"Trade failed: {result}")
                 return {
                     'success': False,
-                    'error': result.get('error', 'Unknown error'),
-                    'raw': result.get('raw_response')
+                    'error': result.get('error', 'Unknown error')
                 }
 
         except Exception as e:
