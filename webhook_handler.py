@@ -1,13 +1,20 @@
 import logging
+import os
+from dotenv import load_dotenv
 from bingx_client import BingXClient
 
 logger = logging.getLogger(__name__)
+load_dotenv()  # Cargar las claves desde el .env
 
 class WebhookHandler:
     """Handles TradingView webhook signals and executes trades"""
 
     def __init__(self):
-        self.bingx_client = BingXClient()
+        api_key = os.getenv("BINGX_API_KEY")
+        api_secret = os.getenv("BINGX_API_SECRET")
+        if not api_key or not api_secret:
+            raise ValueError("Missing BINGX_API_KEY or BINGX_API_SECRET in environment.")
+        self.bingx_client = BingXClient(api_key, api_secret)
 
     def execute_trade(self, action: str, ticker: str, quantity: float = None) -> dict:
         try:
@@ -15,9 +22,6 @@ class WebhookHandler:
 
             if action not in ['BUY', 'SELL']:
                 return {'success': False, 'error': f"Invalid action: {action}"}
-
-            if not self.bingx_client.api_key or not self.bingx_client.secret_key:
-                return {'success': False, 'error': "API keys not configured."}
 
             if not self.bingx_client.test_connection():
                 return {'success': False, 'error': "Failed to connect to BingX API."}
@@ -39,8 +43,7 @@ class WebhookHandler:
             qty = quantity or (balance / 7)
             logger.info(f"✅ Available USDT: {balance} → Quantity to trade: {qty}")
 
-            # Usar ticker original **con guion medio**
-            symbol = ticker.upper()
+            symbol = ticker.upper()  # e.g. BTC-USDT
             logger.debug(f"Using symbol for API: {symbol}")
 
             symbol_info = self.bingx_client.get_symbol_info(symbol)
