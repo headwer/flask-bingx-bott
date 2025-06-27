@@ -9,6 +9,8 @@ from urllib.parse import urlencode
 logger = logging.getLogger(__name__)
 
 class BingXClient:
+    """BingX Futures API client for executing trades"""
+
     def __init__(self):
         self.api_key = os.getenv("BINGX_API_KEY", "")
         self.secret_key = os.getenv("BINGX_SECRET_KEY", "")
@@ -18,6 +20,7 @@ class BingXClient:
             logger.warning("BingX API credentials not found in environment variables")
 
     def _generate_signature(self, params: str) -> str:
+        """Generate HMAC-SHA256 signature"""
         return hmac.new(
             self.secret_key.encode('utf-8'),
             params.encode('utf-8'),
@@ -25,9 +28,14 @@ class BingXClient:
         ).hexdigest()
 
     def _make_request(self, method: str, endpoint: str, params: dict = None) -> dict:
+        """Make authenticated request to BingX API"""
         if not params:
             params = {}
+
+        # Add timestamp
         params['timestamp'] = int(time.time() * 1000)
+
+        # Create query string
         query_string = urlencode(params)
         signature = self._generate_signature(query_string)
         params['signature'] = signature
@@ -46,9 +54,10 @@ class BingXClient:
                 response = requests.post(url, params=params, headers=headers, timeout=10)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
-            
+
             logger.debug(f"BingX API request: {method} {url}")
             logger.debug(f"Response status: {response.status_code}")
+
             response.raise_for_status()
             return response.json()
 
@@ -57,50 +66,61 @@ class BingXClient:
             raise
 
     def test_connection(self) -> bool:
+        """Test connection to BingX Futures API"""
         try:
             if not self.api_key or not self.secret_key:
                 return False
+
             response = self._make_request('GET', '/openApi/swap/v2/user/balance')
             return response.get('code') == 0
+
         except Exception as e:
             logger.error(f"BingX connection test failed: {str(e)}")
             return False
 
     def get_account_balance(self) -> dict:
+        """Get futures account balance"""
         try:
             response = self._make_request('GET', '/openApi/swap/v2/user/balance')
-            raw_data = response.get('data', {})
+            logger.debug(f"Raw balance response: {response}")
 
-            logger.debug(f"Raw balance response: {raw_data}")
+            if response.get("code") == 0:
+                data = response.get("data", {})
+                if isinstance(data, dict) and "balance" in data:
+                    balance_info = data["balance"]
+                    return {
+                        'success': True,
+                        'data': [{
+                            'asset': balance_info.get("asset", "USDT"),
+                            'available': balance_info.get("availableMargin", "0")
+                        }]
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': "Invalid response format: expected a list of balances"
+                    }
 
-            if isinstance(raw_data, list):
-                return {'success': True, 'data': raw_data}
-            elif isinstance(raw_data, dict) and 'balance' in raw_data:
-                return {'success': True, 'data': [raw_data['balance']]}
-            else:
-                return {'success': False, 'error': "Invalid response format: expected a list of balances"}
+            return {
+                'success': False,
+                'error': response.get("msg", "Unknown error")
+            }
+
         except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    def get_symbol_info(self, symbol: str) -> dict:
-        try:
-            response = self._make_request('GET', '/openApi/swap/v2/market/getAllContracts')
-            if response.get('code') == 0:
-                contracts = response.get('data', [])
-                symbol_info = next((c for c in contracts if c.get('symbol') == symbol), None)
-                return {'success': True, 'data': symbol_info} if symbol_info else {
-                    'success': False,
-                    'error': f"Symbol {symbol} not found"
-                }
-            else:
-                return {
-                    'success': False,
-                    'error': response.get('msg', 'API error fetching symbols')
-                }
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+            return {
+                'success': False,
+                'error': str(e)
+            }
 
     def place_market_order(self, symbol: str, side: str, quantity: float) -> dict:
+        """
+        Place a market order on BingX Futures
+
+        Args:
+            symbol: Trading pair (e.g., 'BTCUSDT')
+            side: 'BUY' or 'SELL'
+            quantity: Order quantity (float)
+        """
         try:
             params = {
                 'symbol': symbol,
@@ -125,14 +145,53 @@ class BingXClient:
                     'raw_response': response
                 }
             else:
+                error_msg = response.get('msg', 'Unknown error')
+                logger.error(f"BingX order failed: {error_msg}")
                 return {
                     'success': False,
-                    'error': response.get('msg', 'Unknown error'),
+                    'error': f"BingX API error: {error_msg}",
                     'raw_response': response
+                }
+
+        except Exception as e:
+            logger.error(f"Failed to place market order: {str(e)}")
+            return {
+                'success': False,
+                'error': f"Order execution failed: {str(e)}"
+            }
+
+    def get_symbol_info(self, symbol: str = None, list_all: bool = False) -> dict:
+        """Get futures symbol information"""
+        try:
+            response = self._make_request('GET', '/openApi/swap/v2/market/getAllContracts')
+
+            if response.get('code') == 0:
+                contracts = response.get('data', [])
+
+                if list_all:
+                    return contracts  # Devolver lista completa si se solicita
+
+                if symbol:
+                    symbol_info = next((s for s in contracts if s.get('symbol') == symbol), None)
+                    return {
+                        'success': True if symbol_info else False,
+                        'data': symbol_info,
+                        'error': None if symbol_info else "Symbol not found"
+                    }
+
+                return {
+                    'success': False,
+                    'error': "Symbol not provided and list_all=False"
+                }
+
+            else:
+                return {
+                    'success': False,
+                    'error': response.get('msg', 'Symbol fetch failed')
                 }
 
         except Exception as e:
             return {
                 'success': False,
-                'error': f"Order execution failed: {str(e)}"
+                'error': str(e)
             }
