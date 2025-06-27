@@ -10,14 +10,6 @@ class WebhookHandler:
         self.bingx_client = BingXClient()
 
     def execute_trade(self, action: str, ticker: str, quantity: float = None) -> dict:
-        """
-        Execute a trade based on webhook signal
-
-        Args:
-            action: 'BUY' or 'SELL'
-            ticker: Trading pair (e.g., 'BTC-USDT')
-            quantity: Optional - calculated automatically from account balance
-        """
         try:
             logger.info(f"📩 Executing trade: {action} {ticker}")
 
@@ -30,21 +22,24 @@ class WebhookHandler:
             if not self.bingx_client.test_connection():
                 return {'success': False, 'error': "Failed to connect to BingX API."}
 
-            # Obtener balance
+            # ✅ Obtener balance y adaptarse al nuevo formato
             account_info = self.bingx_client.get_account_balance()
             if not account_info['success']:
                 return {'success': False, 'error': f"Failed to fetch balance: {account_info.get('error', '')}"}
 
-            balances = account_info['data']
-            usdt_balance = next((item for item in balances if item.get('asset') == 'USDT'), None)
-            if not usdt_balance or float(usdt_balance['available']) <= 0:
-                return {'success': False, 'error': "No USDT balance available to trade."}
+            balance_data = account_info['data']
+            if not isinstance(balance_data, dict) or 'balance' not in balance_data:
+                return {'success': False, 'error': "Invalid balance structure from API."}
 
-            balance = float(usdt_balance['available'])
-            quantity = balance / 7
-            logger.info(f"💰 USDT balance: {balance} -> Using: {quantity}")
+            usdt_info = balance_data['balance']
+            available_usdt = float(usdt_info.get('availableMargin', 0))
+            if available_usdt <= 0:
+                return {'success': False, 'error': "No USDT available to trade."}
 
-            # 🔁 Normalizar el símbolo
+            quantity = available_usdt / 7
+            logger.info(f"💰 Available USDT: {available_usdt} → Using: {quantity}")
+
+            # 🔁 Normalizar símbolo
             symbol = ticker.replace('-', '_').replace('/', '_').upper()
             logger.debug(f"✅ Normalized symbol for API: {symbol}")
 
@@ -54,7 +49,7 @@ class WebhookHandler:
 
             rounded_quantity = round(quantity, 6)
 
-            # Ejecutar orden
+            # ✅ Ejecutar orden
             result = self.bingx_client.place_market_order(
                 symbol=symbol,
                 side=action,
