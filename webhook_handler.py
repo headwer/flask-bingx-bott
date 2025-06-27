@@ -19,95 +19,69 @@ class WebhookHandler:
             quantity: Optional - calculated automatically from account balance
         """
         try:
-            logger.info(f"Executing trade: {action} {ticker}")
+            logger.info(f"📩 Executing trade: {action} {ticker}")
 
             if action not in ['BUY', 'SELL']:
-                return {
-                    'success': False,
-                    'error': f"Invalid action: {action}"
-                }
+                return {'success': False, 'error': f"Invalid action: {action}"}
 
             if not self.bingx_client.api_key or not self.bingx_client.secret_key:
-                return {
-                    'success': False,
-                    'error': "API keys not configured. Set BINGX_API_KEY and BINGX_SECRET_KEY."
-                }
+                return {'success': False, 'error': "API keys not configured."}
 
             if not self.bingx_client.test_connection():
-                return {
-                    'success': False,
-                    'error': "Failed to connect to BingX API."
-                }
+                return {'success': False, 'error': "Failed to connect to BingX API."}
 
             # Obtener balance
             account_info = self.bingx_client.get_account_balance()
             if not account_info['success']:
-                return {
-                    'success': False,
-                    'error': f"Failed to fetch balance: {account_info.get('error', '')}"
-                }
+                return {'success': False, 'error': f"Failed to fetch balance: {account_info.get('error', '')}"}
 
             balances = account_info['data']
-            if isinstance(balances, dict):
-                balances = [balances]  # Convertir en lista si es dict
-
             usdt_balance = next((item for item in balances if item.get('asset') == 'USDT'), None)
-            if not usdt_balance or float(usdt_balance.get('availableMargin', 0)) <= 0:
-                return {
-                    'success': False,
-                    'error': "No USDT balance available to trade."
-                }
+            if not usdt_balance or float(usdt_balance['available']) <= 0:
+                return {'success': False, 'error': "No USDT balance available to trade."}
 
-            balance = float(usdt_balance['availableMargin'])
+            balance = float(usdt_balance['available'])
             quantity = balance / 7
-            logger.info(f"Available USDT balance: {balance} -> Trading quantity: {quantity}")
+            logger.info(f"💰 USDT balance: {balance} -> Using: {quantity}")
 
-            # Verificar símbolo
-            symbol_info = self.bingx_client.get_symbol_info(ticker)
+            # 🔁 Normalizar el símbolo
+            symbol = ticker.replace('-', '_').replace('/', '_').upper()
+            logger.debug(f"✅ Normalized symbol for API: {symbol}")
+
+            symbol_info = self.bingx_client.get_symbol_info(symbol)
             if not symbol_info['success']:
-                return {
-                    'success': False,
-                    'error': f"Invalid trading pair: {ticker}. {symbol_info.get('error', '')}"
-                }
+                return {'success': False, 'error': f"Invalid trading pair: {symbol}. {symbol_info.get('error', '')}"}
 
             rounded_quantity = round(quantity, 6)
 
             # Ejecutar orden
             result = self.bingx_client.place_market_order(
-                symbol=ticker,
+                symbol=symbol,
                 side=action,
                 quantity=rounded_quantity
             )
 
             if result['success']:
-                logger.info(f"Trade executed: {result}")
+                logger.info(f"✅ Trade executed: {result}")
                 return {
                     'success': True,
                     'order_id': result.get('order_id'),
-                    'symbol': ticker,
+                    'symbol': symbol,
                     'side': action,
                     'quantity': rounded_quantity,
                     'status': result.get('status'),
-                    'message': f"Executed {action} order for {rounded_quantity} {ticker}"
+                    'message': f"Executed {action} order for {rounded_quantity} {symbol}"
                 }
             else:
-                logger.error(f"Trade failed: {result}")
-                return {
-                    'success': False,
-                    'error': result.get('error', 'Unknown error')
-                }
+                logger.error(f"❌ Trade failed: {result}")
+                return {'success': False, 'error': result.get('error', 'Unknown error')}
 
         except Exception as e:
-            logger.error(f"Trade error: {str(e)}")
-            return {
-                'success': False,
-                'error': f"Trade execution failed: {str(e)}"
-            }
+            logger.error(f"❌ Trade error: {str(e)}")
+            return {'success': False, 'error': f"Trade execution failed: {str(e)}"}
 
     def test_connection(self) -> bool:
-        """Test connection to BingX API"""
         return self.bingx_client.test_connection()
 
     def get_account_info(self) -> dict:
-        """Get account balance"""
         return self.bingx_client.get_account_balance()
