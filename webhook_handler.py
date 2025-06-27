@@ -39,6 +39,7 @@ class WebhookHandler:
                     'error': "Failed to connect to BingX API."
                 }
 
+            # Obtener balance
             account_info = self.bingx_client.get_account_balance()
             if not account_info['success']:
                 return {
@@ -46,16 +47,12 @@ class WebhookHandler:
                     'error': f"Failed to fetch balance: {account_info.get('error', '')}"
                 }
 
-            # Validación del formato del balance
             balances = account_info['data']
-            if not isinstance(balances, list):
-                return {
-                    'success': False,
-                    'error': "Invalid response format: expected a list of balances"
-                }
+            if isinstance(balances, dict):
+                balances = [balances]  # Convertir en lista si es dict
 
             usdt_balance = next((item for item in balances if item.get('asset') == 'USDT'), None)
-            if not usdt_balance or float(usdt_balance['availableMargin']) <= 0:
+            if not usdt_balance or float(usdt_balance.get('availableMargin', 0)) <= 0:
                 return {
                     'success': False,
                     'error': "No USDT balance available to trade."
@@ -65,26 +62,19 @@ class WebhookHandler:
             quantity = balance / 7
             logger.info(f"Available USDT balance: {balance} -> Trading quantity: {quantity}")
 
-            # DEBUG EXTRA: imprimir los primeros 10 símbolos válidos para ayudarte a encontrar el correcto
-            all_contracts = self.bingx_client.get_symbol_info(symbol=None, list_all=True)
-            if isinstance(all_contracts, list):
-                logger.debug("⚠️ Lista de contratos disponibles:")
-                for contract in all_contracts[:10]:
-                    logger.debug(f"➡️  {contract.get('symbol')}")
-
-            # Normaliza símbolo de entrada para la validación
-            symbol = ticker.replace('-', '_').upper()
-            symbol_info = self.bingx_client.get_symbol_info(symbol)
+            # Verificar símbolo
+            symbol_info = self.bingx_client.get_symbol_info(ticker)
             if not symbol_info['success']:
                 return {
                     'success': False,
-                    'error': f"Invalid trading pair: {symbol}. {symbol_info.get('error', '')}"
+                    'error': f"Invalid trading pair: {ticker}. {symbol_info.get('error', '')}"
                 }
 
             rounded_quantity = round(quantity, 6)
 
+            # Ejecutar orden
             result = self.bingx_client.place_market_order(
-                symbol=symbol,
+                symbol=ticker,
                 side=action,
                 quantity=rounded_quantity
             )
@@ -94,11 +84,11 @@ class WebhookHandler:
                 return {
                     'success': True,
                     'order_id': result.get('order_id'),
-                    'symbol': symbol,
+                    'symbol': ticker,
                     'side': action,
                     'quantity': rounded_quantity,
                     'status': result.get('status'),
-                    'message': f"Executed {action} order for {rounded_quantity} {symbol}"
+                    'message': f"Executed {action} order for {rounded_quantity} {ticker}"
                 }
             else:
                 logger.error(f"Trade failed: {result}")
