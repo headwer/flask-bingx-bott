@@ -108,20 +108,26 @@ class BingXClient:
         Place a market order on BingX Futures
 
         Args:
-            symbol: Trading pair (e.g., 'BTC-USDT') - **with hyphen**
+            symbol: Trading pair (e.g., 'BTC-USDT') - with hyphen
             side: 'BUY' or 'SELL'
             quantity: Order quantity (float)
         """
         try:
+            # Determinar posición según lado
+            position_side = "LONG" if side == "BUY" else "SHORT"
+
+            # Formatear cantidad a string con 4 decimales
+            quantity_str = f"{quantity:.4f}"
+
             params = {
-                'symbol': symbol,        # e.g. 'BTC-USDT' with hyphen
-                'side': side,            # 'BUY' or 'SELL'
-                'positionSide': 'BOTH',
+                'symbol': symbol,           # Ejemplo: "BTC-USDT"
+                'side': side,               # "BUY" o "SELL"
+                'positionSide': position_side,
                 'type': 'MARKET',
-                'quantity': str(quantity)  # quantity as string
+                'quantity': quantity_str
             }
 
-            logger.info(f"Placing {side} market order: {quantity} {symbol}")
+            logger.info(f"Placing {side} market order: {quantity_str} {symbol} with positionSide {position_side}")
             response = self._make_request('POST', '/openApi/swap/v2/trade/order', params)
 
             if response.get('code') == 0:
