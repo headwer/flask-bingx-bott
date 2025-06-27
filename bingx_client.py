@@ -20,7 +20,7 @@ class BingXClient:
             logger.warning("BingX API credentials not found in environment variables")
 
     def _generate_signature(self, params: str) -> str:
-        """Generate HMAC-SHA256 signature"""
+        """Create HMAC-SHA256 signature."""
         return hmac.new(
             self.secret_key.encode('utf-8'),
             params.encode('utf-8'),
@@ -28,131 +28,84 @@ class BingXClient:
         ).hexdigest()
 
     def _make_request(self, method: str, endpoint: str, params: dict = None) -> dict:
-        """Make authenticated request to BingX API"""
-        if not params:
+        """Send signed request to BingX API."""
+        if params is None:
             params = {}
-
         params['timestamp'] = int(time.time() * 1000)
-        query_string = urlencode(params)
-        signature = self._generate_signature(query_string)
-        params['signature'] = signature
-
+        query = urlencode(params)
+        params['signature'] = self._generate_signature(query)
         headers = {
             'X-BX-APIKEY': self.api_key,
             'Content-Type': 'application/json'
         }
-
         url = f"{self.base_url}{endpoint}"
-
         try:
-            if method.upper() == 'GET':
-                response = requests.get(url, params=params, headers=headers, timeout=10)
-            elif method.upper() == 'POST':
-                response = requests.post(url, params=params, headers=headers, timeout=10)
-            else:
-                raise ValueError(f"Unsupported HTTP method: {method}")
-
-            logger.debug(f"BingX API request: {method} {url}")
-            logger.debug(f"Response status: {response.status_code}")
-            response.raise_for_status()
-            return response.json()
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"BingX API request failed: {str(e)}")
+            resp = requests.get(url, params=params, headers=headers, timeout=10) if method.upper() == 'GET' else requests.post(url, params=params, headers=headers, timeout=10)
+            logger.debug(f"Request {method} {url} → {resp.status_code}")
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as e:
+            logger.error(f"Request failed: {e}")
             raise
 
     def test_connection(self) -> bool:
-        """Test connection to BingX Futures API"""
+        """Check API key and connection validity."""
         try:
             if not self.api_key or not self.secret_key:
                 return False
-
-            response = self._make_request('GET', '/openApi/swap/v2/user/balance')
-            return response.get('code') == 0
-
+            resp = self._make_request('GET', '/openApi/swap/v2/user/balance')
+            return resp.get('code') == 0
         except Exception as e:
-            logger.error(f"BingX connection test failed: {str(e)}")
+            logger.error(f"Connection test failed: {e}")
             return False
 
     def get_account_balance(self) -> dict:
-        """Get futures account balance (adapted to new response format)"""
+        """Retrieve USDT balance."""
         try:
-            response = self._make_request('GET', '/openApi/swap/v2/user/balance')
-            logger.debug(f"Raw balance response: {response}")
-
-            if response.get('code') == 0 and 'data' in response:
-                balance_info = response['data'].get('balance', {})
-                return {
-                    'success': True,
-                    'data': [
-                        {
-                            'asset': balance_info.get('asset', 'USDT'),
-                            'available': balance_info.get('availableMargin', '0')
-                        }
-                    ]
-                }
-            else:
-                return {
-                    'success': False,
-                    'error': f"Unexpected response: {response}"
-                }
-
+            resp = self._make_request('GET', '/openApi/swap/v2/user/balance')
+            logger.debug(f"Balance response: {resp}")
+            if resp.get('code') == 0 and 'data' in resp:
+                bal = resp['data'].get('balance', {})
+                return {'success': True, 'data': [{'asset': bal.get('asset', 'USDT'), 'available': bal.get('availableMargin', '0')}]}
+            return {'success': False, 'error': f"Unexpected response: {resp}"}
         except Exception as e:
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            return {'success': False, 'error': str(e)}
 
     def place_market_order(self, symbol: str, side: str, quantity: float) -> dict:
         """
-        Place a market order on BingX Futures
-
-        Args:
-            symbol: Trading pair (e.g., 'BTC-USDT') - with hyphen
-            side: 'BUY' or 'SELL'
-            quantity: Order quantity (float)
+        Place a market order.
+        
+        :param symbol: e.g. "BTC-USDT"
+        :param side: "BUY" or "SELL"
+        :param quantity: e.g. 0.001 (float)
         """
         try:
-            # Determinar posición según lado
-            position_side = "LONG" if side == "BUY" else "SHORT"
-
-            # Formatear cantidad a string con 4 decimales
-            quantity_str = f"{quantity:.4f}"
-
+            position = "LONG" if side == "BUY" else "SHORT"
+            qty_str = f"{quantity:.4f}"  # e.g. "0.1234"
             params = {
-                'symbol': symbol,           # Ejemplo: "BTC-USDT"
-                'side': side,               # "BUY" o "SELL"
-                'positionSide': position_side,
+                'symbol': symbol,
+                'side': side,
+                'positionSide': position,
                 'type': 'MARKET',
-                'quantity': quantity_str
+                'quantity': qty_str
             }
-
-            logger.info(f"Placing {side} market order: {quantity_str} {symbol} with positionSide {position_side}")
-            response = self._make_request('POST', '/openApi/swap/v2/trade/order', params)
-
-            if response.get('code') == 0:
-                order_data = response.get('data', {})
+            logger.info(f"Posting order: {side} {qty_str} {symbol} ({position})")
+            resp = self._make_request('POST', '/openApi/swap/v2/trade/order', params)
+            if resp.get('code') == 0:
+                od = resp.get('data', {})
                 return {
                     'success': True,
-                    'order_id': order_data.get('orderId'),
+                    'order_id': od.get('orderId'),
                     'symbol': symbol,
                     'side': side,
                     'quantity': quantity,
-                    'status': order_data.get('status'),
-                    'raw_response': response
+                    'status': od.get('status'),
+                    'raw_response': resp
                 }
             else:
-                error_msg = response.get('msg', 'Unknown error')
-                logger.error(f"BingX order failed: {error_msg}")
-                return {
-                    'success': False,
-                    'error': f"BingX API error: {error_msg}",
-                    'raw_response': response
-                }
-
+                em = resp.get('msg', 'Unknown error')
+                logger.error(f"Order error: {em}")
+                return {'success': False, 'error': f"BingX API error: {em}", 'raw_response': resp}
         except Exception as e:
-            logger.error(f"Failed to place market order: {str(e)}")
-            return {
-                'success': False,
-                'error': f"Order execution failed: {str(e)}"
-            }
+            logger.error(f"Order placement failed: {e}")
+            return {'success': False, 'error': f"Order execution failed: {e}"}
