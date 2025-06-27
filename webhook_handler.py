@@ -10,48 +10,58 @@ class WebhookHandler:
         self.bingx_client = BingXClient()
 
     def execute_trade(self, action: str, ticker: str, quantity: float = None) -> dict:
-        try:
-            logger.info(f"📩 Executing trade: {action} {ticker}")
+        """
+        Execute a trade based on webhook signal
 
+        Args:
+            action: 'BUY' or 'SELL'
+            ticker: Trading pair (e.g., 'BTCUSDT')
+            quantity: Optional - calculated automatically from account balance
+        """
+
+        try:
+            logger.info(f"🚀 Executing trade: {action} {ticker}")
+
+            # Validar acción
             if action not in ['BUY', 'SELL']:
                 return {'success': False, 'error': f"Invalid action: {action}"}
 
+            # Verificar claves API
             if not self.bingx_client.api_key or not self.bingx_client.secret_key:
                 return {'success': False, 'error': "API keys not configured."}
 
+            # Probar conexión a BingX
             if not self.bingx_client.test_connection():
                 return {'success': False, 'error': "Failed to connect to BingX API."}
 
-            # ✅ Obtener balance y adaptarse al nuevo formato
+            # Obtener balance
             account_info = self.bingx_client.get_account_balance()
             if not account_info['success']:
                 return {'success': False, 'error': f"Failed to fetch balance: {account_info.get('error', '')}"}
 
             balance_data = account_info['data']
-            if not isinstance(balance_data, dict) or 'balance' not in balance_data:
-                return {'success': False, 'error': "Invalid balance structure from API."}
+            usdt_info = balance_data.get('balance', {})
 
-            usdt_info = balance_data['balance']
-            available_usdt = float(usdt_info.get('availableMargin', 0))
-            if available_usdt <= 0:
-                return {'success': False, 'error': "No USDT available to trade."}
+            if not usdt_info or 'availableMargin' not in usdt_info:
+                return {'success': False, 'error': "USDT balance data missing or invalid from API."}
 
-            quantity = available_usdt / 7
-            logger.info(f"💰 Available USDT: {available_usdt} → Using: {quantity}")
+            balance = float(usdt_info['availableMargin'])
+            if balance <= 0:
+                return {'success': False, 'error': "No available USDT balance to trade."}
 
-            # 🔁 Normalizar símbolo
-            symbol = ticker.replace('-', '_').replace('/', '_').upper()
-            logger.debug(f"✅ Normalized symbol for API: {symbol}")
+            quantity = quantity or (balance / 7)
+            logger.info(f"✅ Available USDT: {balance} -> Quantity to trade: {quantity}")
 
-            symbol_info = self.bingx_client.get_symbol_info(symbol)
+            # Validar símbolo
+            symbol_info = self.bingx_client.get_symbol_info(ticker)
             if not symbol_info['success']:
-                return {'success': False, 'error': f"Invalid trading pair: {symbol}. {symbol_info.get('error', '')}"}
+                return {'success': False, 'error': f"Invalid trading pair: {ticker}. {symbol_info.get('error', '')}"}
 
             rounded_quantity = round(quantity, 6)
 
-            # ✅ Ejecutar orden
+            # Ejecutar orden
             result = self.bingx_client.place_market_order(
-                symbol=symbol,
+                symbol=ticker,
                 side=action,
                 quantity=rounded_quantity
             )
@@ -61,11 +71,11 @@ class WebhookHandler:
                 return {
                     'success': True,
                     'order_id': result.get('order_id'),
-                    'symbol': symbol,
+                    'symbol': ticker,
                     'side': action,
                     'quantity': rounded_quantity,
                     'status': result.get('status'),
-                    'message': f"Executed {action} order for {rounded_quantity} {symbol}"
+                    'message': f"Executed {action} order for {rounded_quantity} {ticker}"
                 }
             else:
                 logger.error(f"❌ Trade failed: {result}")
