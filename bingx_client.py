@@ -20,6 +20,7 @@ class BingXClient:
             logger.warning("BingX API credentials not found in environment variables")
 
     def _generate_signature(self, params: str) -> str:
+        """Generate HMAC-SHA256 signature"""
         return hmac.new(
             self.secret_key.encode('utf-8'),
             params.encode('utf-8'),
@@ -27,12 +28,14 @@ class BingXClient:
         ).hexdigest()
 
     def _make_request(self, method: str, endpoint: str, params: dict = None) -> dict:
+        """Make authenticated request to BingX API"""
         if not params:
             params = {}
 
         params['timestamp'] = int(time.time() * 1000)
         query_string = urlencode(params)
-        params['signature'] = self._generate_signature(query_string)
+        signature = self._generate_signature(query_string)
+        params['signature'] = signature
 
         headers = {
             'X-BX-APIKEY': self.api_key,
@@ -59,6 +62,7 @@ class BingXClient:
             raise
 
     def test_connection(self) -> bool:
+        """Test connection to BingX Futures API"""
         try:
             if not self.api_key or not self.secret_key:
                 return False
@@ -71,6 +75,7 @@ class BingXClient:
             return False
 
     def get_account_balance(self) -> dict:
+        """Get futures account balance (adapted to new response format)"""
         try:
             response = self._make_request('GET', '/openApi/swap/v2/user/balance')
             logger.debug(f"Raw balance response: {response}")
@@ -99,13 +104,21 @@ class BingXClient:
             }
 
     def place_market_order(self, symbol: str, side: str, quantity: float) -> dict:
+        """
+        Place a market order on BingX Futures
+
+        Args:
+            symbol: Trading pair (e.g., 'BTC-USDT') - **with hyphen**
+            side: 'BUY' or 'SELL'
+            quantity: Order quantity (float)
+        """
         try:
             params = {
-                'symbol': symbol,
-                'side': side,
+                'symbol': symbol,        # e.g. 'BTC-USDT' with hyphen
+                'side': side,            # 'BUY' or 'SELL'
                 'positionSide': 'BOTH',
                 'type': 'MARKET',
-                'quantity': str(quantity)
+                'quantity': str(quantity)  # quantity as string
             }
 
             logger.info(f"Placing {side} market order: {quantity} {symbol}")
