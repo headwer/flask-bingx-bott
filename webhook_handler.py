@@ -71,21 +71,24 @@ class WebhookHandler:
             quantity = balance / 7
             logger.info(f"Available USDT balance: {balance} -> Trading quantity: {quantity}")
 
+            # Normalizar ticker para BingX (quitar guiones)
+            symbol = ticker.replace("-", "")
+
             # Validar símbolo
-            symbol_info = self.bingx_client.get_symbol_info(ticker)
-            logger.debug(f"Symbol info for {ticker}: {symbol_info}")  # Línea para debug
+            symbol_info = self.bingx_client.get_symbol_info(symbol)
+            logger.debug(f"Symbol info for {symbol}: {symbol_info}")  # Línea para debug
 
             if not symbol_info['success'] or symbol_info['data'] is None:
                 return {
                     'success': False,
-                    'error': f"Invalid trading pair: {ticker}. {symbol_info.get('error', '')}"
+                    'error': f"Invalid trading pair: {symbol}. {symbol_info.get('error', '')}"
                 }
 
             rounded_quantity = round(quantity, 6)
 
             # Ejecutar orden
             result = self.bingx_client.place_market_order(
-                symbol=ticker,
+                symbol=symbol,
                 side=action,
                 quantity=rounded_quantity
             )
@@ -95,11 +98,11 @@ class WebhookHandler:
                 return {
                     'success': True,
                     'order_id': result.get('order_id'),
-                    'symbol': ticker,
+                    'symbol': symbol,
                     'side': action,
                     'quantity': rounded_quantity,
                     'status': result.get('status'),
-                    'message': f"Executed {action} order for {rounded_quantity} {ticker}"
+                    'message': f"Executed {action} order for {rounded_quantity} {symbol}"
                 }
             else:
                 logger.error(f"Trade failed: {result}")
