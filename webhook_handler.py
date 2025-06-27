@@ -19,10 +19,8 @@ class WebhookHandler:
             quantity: Optional - calculated automatically from account balance
         """
         try:
-            # ✅ Normalizar formato del ticker y forzar sufijo .P (ej. BTC-USDT → BTCUSDT.P)
-            ticker = ticker.replace('-', '').upper()
-            if not ticker.endswith('.P'):
-                ticker = f"{ticker}.P"
+            # ✅ Convertir a mayúsculas pero conservar el guion
+            ticker = ticker.upper()
 
             logger.info(f"Executing trade: {action} {ticker}")
 
