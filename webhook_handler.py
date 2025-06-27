@@ -43,37 +43,38 @@ class WebhookHandler:
                     'error': "Failed to connect to BingX API."
                 }
 
-            # Obtener balance en tiempo real
-            account_info = self.bingx_client.get_account_balance()
-            data = account_info.get('data')
+            # Obtener balance en tiempo real si no se pasa cantidad
+            if quantity is None:
+                account_info = self.bingx_client.get_account_balance()
+                data = account_info.get('data')
 
-            if not account_info['success']:
-                return {
-                    'success': False,
-                    'error': f"Failed to fetch balance: {account_info.get('error', '')}"
-                }
+                if not account_info['success']:
+                    return {
+                        'success': False,
+                        'error': f"Failed to fetch balance: {account_info.get('error', '')}"
+                    }
 
-            if not isinstance(data, list):
-                return {
-                    'success': False,
-                    'error': "Invalid response format: expected a list of balances"
-                }
+                if not isinstance(data, list):
+                    return {
+                        'success': False,
+                        'error': "Invalid response format: expected a list of balances"
+                    }
 
-            # Buscar saldo USDT disponible
-            usdt_balance = next((item for item in data if item.get('asset') == 'USDT'), None)
-            if not usdt_balance or float(usdt_balance.get('available', 0)) <= 0:
-                return {
-                    'success': False,
-                    'error': "No USDT balance available to trade."
-                }
+                usdt_balance = next((item for item in data if item.get('asset') == 'USDT'), None)
+                if not usdt_balance or float(usdt_balance.get('available', 0)) <= 0:
+                    return {
+                        'success': False,
+                        'error': "No USDT balance available to trade."
+                    }
 
-            balance = float(usdt_balance['available'])
-            quantity = balance / 7
-            logger.info(f"Available USDT balance: {balance} -> Trading quantity: {quantity}")
+                balance = float(usdt_balance['available'])
+                quantity = balance / 7
+                logger.info(f"Available USDT balance: {balance} -> Trading quantity: {quantity}")
 
-            # Normalizar símbolo para BingX (ej. 'BTC-USDT' → 'BTCUSDT')
-            symbol = ticker.replace("-", "")
-            rounded_quantity = round(quantity, 6)
+            # Asegurarse que ticker tenga guion y esté en mayúsculas
+            symbol = ticker.upper()
+            # Redondear cantidad a 4 decimales
+            rounded_quantity = round(quantity, 4)
 
             # Ejecutar orden
             result = self.bingx_client.place_market_order(
