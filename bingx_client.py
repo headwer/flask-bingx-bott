@@ -10,15 +10,15 @@ logger = logging.getLogger(__name__)
 
 class BingXClient:
     """BingX Futures API client for executing trades"""
-
+    
     def __init__(self):
         self.api_key = os.getenv("BINGX_API_KEY", "")
         self.secret_key = os.getenv("BINGX_SECRET_KEY", "")
         self.base_url = "https://open-api.bingx.com"
-
+        
         if not self.api_key or not self.secret_key:
             logger.warning("BingX API credentials not found in environment variables")
-
+    
     def _generate_signature(self, params: str) -> str:
         """Generate HMAC-SHA256 signature"""
         return hmac.new(
@@ -26,16 +26,13 @@ class BingXClient:
             params.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
-
+    
     def _make_request(self, method: str, endpoint: str, params: dict = None) -> dict:
         """Make authenticated request to BingX API"""
         if not params:
             params = {}
-
-        # Add timestamp
+        
         params['timestamp'] = int(time.time() * 1000)
-
-        # Create query string
         query_string = urlencode(params)
         signature = self._generate_signature(query_string)
         params['signature'] = signature
@@ -44,9 +41,9 @@ class BingXClient:
             'X-BX-APIKEY': self.api_key,
             'Content-Type': 'application/json'
         }
-
+        
         url = f"{self.base_url}{endpoint}"
-
+        
         try:
             if method.upper() == 'GET':
                 response = requests.get(url, params=params, headers=headers, timeout=10)
@@ -54,13 +51,11 @@ class BingXClient:
                 response = requests.post(url, params=params, headers=headers, timeout=10)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
-
+            
             logger.debug(f"BingX API request: {method} {url}")
             logger.debug(f"Response status: {response.status_code}")
-
             response.raise_for_status()
             return response.json()
-
         except requests.exceptions.RequestException as e:
             logger.error(f"BingX API request failed: {str(e)}")
             raise
@@ -70,10 +65,8 @@ class BingXClient:
         try:
             if not self.api_key or not self.secret_key:
                 return False
-
             response = self._make_request('GET', '/openApi/swap/v2/user/balance')
             return response.get('code') == 0
-
         except Exception as e:
             logger.error(f"BingX connection test failed: {str(e)}")
             return False
@@ -85,21 +78,14 @@ class BingXClient:
             logger.debug(f"Raw balance response: {response}")
 
             if response.get("code") == 0:
-                data = response.get("data", {})
-                if isinstance(data, dict) and "balance" in data:
-                    balance_info = data["balance"]
-                    return {
-                        'success': True,
-                        'data': [{
-                            'asset': balance_info.get("asset", "USDT"),
-                            'available': balance_info.get("availableMargin", "0")
-                        }]
-                    }
-                else:
-                    return {
-                        'success': False,
-                        'error': "Invalid response format: expected a list of balances"
-                    }
+                balance_info = response.get("data", {}).get("balance", {})
+                return {
+                    'success': True,
+                    'data': [{
+                        'asset': balance_info.get("asset", "USDT"),
+                        'available': float(balance_info.get("availableMargin", "0"))
+                    }]
+                }
 
             return {
                 'success': False,
@@ -113,14 +99,7 @@ class BingXClient:
             }
 
     def place_market_order(self, symbol: str, side: str, quantity: float) -> dict:
-        """
-        Place a market order on BingX Futures
-
-        Args:
-            symbol: Trading pair (e.g., 'BTCUSDT')
-            side: 'BUY' or 'SELL'
-            quantity: Order quantity (float)
-        """
+        """Place a market order on BingX Futures"""
         try:
             params = {
                 'symbol': symbol,
@@ -129,10 +108,9 @@ class BingXClient:
                 'type': 'MARKET',
                 'quantity': str(quantity)
             }
-
             logger.info(f"Placing {side} market order: {quantity} {symbol}")
             response = self._make_request('POST', '/openApi/swap/v2/trade/order', params)
-
+            
             if response.get('code') == 0:
                 order_data = response.get('data', {})
                 return {
@@ -152,7 +130,6 @@ class BingXClient:
                     'error': f"BingX API error: {error_msg}",
                     'raw_response': response
                 }
-
         except Exception as e:
             logger.error(f"Failed to place market order: {str(e)}")
             return {
@@ -160,36 +137,25 @@ class BingXClient:
                 'error': f"Order execution failed: {str(e)}"
             }
 
-    def get_symbol_info(self, symbol: str = None, list_all: bool = False) -> dict:
+    def get_symbol_info(self, symbol: str) -> dict:
         """Get futures symbol information"""
         try:
             response = self._make_request('GET', '/openApi/swap/v2/market/getAllContracts')
-
             if response.get('code') == 0:
                 contracts = response.get('data', [])
-
-                if list_all:
-                    return contracts  # Devolver lista completa si se solicita
-
-                if symbol:
-                    symbol_info = next((s for s in contracts if s.get('symbol') == symbol), None)
-                    return {
-                        'success': True if symbol_info else False,
-                        'data': symbol_info,
-                        'error': None if symbol_info else "Symbol not found"
-                    }
-
+                symbol_info = next((s for s in contracts if s.get('symbol') == symbol), None)
                 return {
+                    'success': True,
+                    'data': symbol_info
+                } if symbol_info else {
                     'success': False,
-                    'error': "Symbol not provided and list_all=False"
+                    'error': f"Symbol {symbol} not found"
                 }
-
             else:
                 return {
                     'success': False,
-                    'error': response.get('msg', 'Symbol fetch failed')
+                    'error': response.get('msg', 'Unknown error')
                 }
-
         except Exception as e:
             return {
                 'success': False,
