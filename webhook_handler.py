@@ -71,19 +71,8 @@ class WebhookHandler:
             quantity = balance / 7
             logger.info(f"Available USDT balance: {balance} -> Trading quantity: {quantity}")
 
-            # Normalizar ticker para BingX (quitar guiones)
+            # Normalizar símbolo para BingX (ej. 'BTC-USDT' → 'BTCUSDT')
             symbol = ticker.replace("-", "")
-
-            # Validar símbolo
-            symbol_info = self.bingx_client.get_symbol_info(symbol)
-            logger.debug(f"Symbol info for {symbol}: {symbol_info}")  # Línea para debug
-
-            if not symbol_info['success'] or symbol_info['data'] is None:
-                return {
-                    'success': False,
-                    'error': f"Invalid trading pair: {symbol}. {symbol_info.get('error', '')}"
-                }
-
             rounded_quantity = round(quantity, 6)
 
             # Ejecutar orden
