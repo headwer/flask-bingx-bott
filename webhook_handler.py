@@ -18,10 +18,8 @@ class WebhookHandler:
             ticker: Trading pair (e.g., 'BTC-USDT')
             quantity: Optional - calculated automatically from account balance
         """
-        try:
-            # ✅ Convertir a mayúsculas pero conservar el guion
-            ticker = ticker.upper()
 
+        try:
             logger.info(f"Executing trade: {action} {ticker}")
 
             # Validar acción
@@ -75,7 +73,9 @@ class WebhookHandler:
 
             # Validar símbolo
             symbol_info = self.bingx_client.get_symbol_info(ticker)
-            if not symbol_info['success']:
+            logger.debug(f"Symbol info for {ticker}: {symbol_info}")  # Línea para debug
+
+            if not symbol_info['success'] or symbol_info['data'] is None:
                 return {
                     'success': False,
                     'error': f"Invalid trading pair: {ticker}. {symbol_info.get('error', '')}"
