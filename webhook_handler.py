@@ -9,106 +9,81 @@ class WebhookHandler:
     def __init__(self):
         self.bingx_client = BingXClient()
 
-    def execute_trade(self, action: str, ticker: str, quantity: float = None) -> dict:
+    def execute_trade(self, message: str) -> dict:
         """
-        Execute a trade based on webhook signal
+        Execute a trade based on webhook signal message.
+
+        Expected message format: "TICKER|ACTION"
+        Example: "BTC-USDT|LONG", "BTC-USDT|CLOSE_SHORT"
 
         Args:
-            action: 'BUY' or 'SELL'
-            ticker: Trading pair (e.g., 'BTC-USDT')
-            quantity: Optional - calculated automatically from account balance
+            message: string with ticker and action separated by '|'
         """
 
         try:
-            logger.info(f"Executing trade: {action} {ticker}")
+            logger.info(f"Received webhook message: {message}")
 
-            # Validar acción
-            if action not in ['BUY', 'SELL']:
-                return {
-                    'success': False,
-                    'error': f"Invalid action: {action}"
-                }
+            if '|' not in message:
+                return {'success': False, 'error': 'Invalid message format'}
 
-            # Verificar claves API
+            ticker, action = message.split('|')
+            ticker = ticker.strip()
+            action = action.strip().upper()
+
+            logger.info(f"Parsed ticker: {ticker}, action: {action}")
+
+            # Check API keys
             if not self.bingx_client.api_key or not self.bingx_client.secret_key:
                 return {
                     'success': False,
-                    'error': "API keys not configured. Set BINGX_API_KEY and BINGX_SECRET_KEY."
+                    'error': "API keys not configured."
                 }
 
-            # Verificar conexión a BingX
+            # Test connection
             if not self.bingx_client.test_connection():
                 return {
                     'success': False,
                     'error': "Failed to connect to BingX API."
                 }
 
-            # Obtener balance en tiempo real
-            account_info = self.bingx_client.get_account_balance()
-            data = account_info.get('data')
+            # Handle close actions
+            if action == 'CLOSE_LONG':
+                return self.bingx_client.close_position(symbol=ticker, side='LONG')
+            elif action == 'CLOSE_SHORT':
+                return self.bingx_client.close_position(symbol=ticker, side='SHORT')
 
-            if not account_info['success']:
-                return {
-                    'success': False,
-                    'error': f"Failed to fetch balance: {account_info.get('error', '')}"
-                }
-
-            if not isinstance(data, list):
-                return {
-                    'success': False,
-                    'error': "Invalid response format: expected a list of balances"
-                }
-
-            # Buscar saldo USDT disponible
-            usdt_balance = next((item for item in data if item.get('asset') == 'USDT'), None)
-            if not usdt_balance or float(usdt_balance.get('available', 0)) <= 0:
-                return {
-                    'success': False,
-                    'error': "No USDT balance available to trade."
-                }
-
-            balance = float(usdt_balance['available'])
-            quantity = balance / 7
-            logger.info(f"Available USDT balance: {balance} -> Trading quantity: {quantity}")
-
-            # Normalizar ticker para BingX (quitar guiones)
-            symbol = ticker.replace("-", "")
-
-            # Validar símbolo
-            symbol_info = self.bingx_client.get_symbol_info(symbol)
-            logger.debug(f"Symbol info for {symbol}: {symbol_info}")  # Línea para debug
-
+            # Validate symbol info
+            symbol_info = self.bingx_client.get_symbol_info(ticker)
             if not symbol_info['success'] or symbol_info['data'] is None:
                 return {
                     'success': False,
-                    'error': f"Invalid trading pair: {symbol}. {symbol_info.get('error', '')}"
+                    'error': f"Invalid trading pair: {ticker}. {symbol_info.get('error', '')}"
                 }
 
-            rounded_quantity = round(quantity, 6)
+            # Get account balance
+            account_info = self.bingx_client.get_account_balance()
+            data = account_info.get('data', [])
 
-            # Ejecutar orden
-            result = self.bingx_client.place_market_order(
-                symbol=symbol,
-                side=action,
-                quantity=rounded_quantity
-            )
-
-            if result['success']:
-                logger.info(f"Trade executed: {result}")
-                return {
-                    'success': True,
-                    'order_id': result.get('order_id'),
-                    'symbol': symbol,
-                    'side': action,
-                    'quantity': rounded_quantity,
-                    'status': result.get('status'),
-                    'message': f"Executed {action} order for {rounded_quantity} {symbol}"
-                }
-            else:
-                logger.error(f"Trade failed: {result}")
+            usdt_balance = next((item for item in data if item.get('asset') == 'USDT'), None)
+            if not usdt_balance:
                 return {
                     'success': False,
-                    'error': result.get('error', 'Unknown error')
+                    'error': "No USDT balance found."
+                }
+
+            balance = float(usdt_balance['available'])
+            quantity = balance / 7  # As per your previous logic
+            rounded_quantity = round(quantity, 6)
+
+            # Place orders based on action
+            if action == 'LONG':
+                return self.bingx_client.place_market_order(ticker, 'BUY', rounded_quantity)
+            elif action == 'SHORT':
+                return self.bingx_client.place_market_order(ticker, 'SELL', rounded_quantity)
+            else:
+                return {
+                    'success': False,
+                    'error': f"Unknown action: {action}"
                 }
 
         except Exception as e:
@@ -117,11 +92,3 @@ class WebhookHandler:
                 'success': False,
                 'error': f"Trade execution failed: {str(e)}"
             }
-
-    def test_connection(self) -> bool:
-        """Test connection to BingX API"""
-        return self.bingx_client.test_connection()
-
-    def get_account_info(self) -> dict:
-        """Get account balance"""
-        return self.bingx_client.get_account_balance()
