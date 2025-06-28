@@ -175,3 +175,34 @@ class BingXClient:
                 'success': False,
                 'error': str(e)
             }
+
+    def close_position(self, symbol: str, side: str) -> dict:
+        """
+        Close all positions on the specified side ('LONG' or 'SHORT') for the symbol.
+
+        Args:
+            symbol: Trading pair symbol, e.g., 'BTC-USDT'
+            side: 'LONG' or 'SHORT'
+        """
+        try:
+            logger.info(f"Closing all {side} positions for {symbol}")
+
+            # To close LONG position, send SELL order; to close SHORT, send BUY order
+            closing_side = 'SELL' if side == 'LONG' else 'BUY'
+
+            # Get available balance for quantity calculation
+            balance_info = self.get_account_balance()
+            usdt = next((item for item in balance_info.get('data', []) if item['asset'] == 'USDT'), None)
+            if not usdt:
+                return {'success': False, 'error': 'No USDT balance available to close position.'}
+
+            balance = float(usdt['available'])
+            qty = round(balance / 7, 6)  # Same logic as open order quantity, adjust as needed
+
+            return self.place_market_order(symbol, closing_side, qty)
+
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f"Failed to close {side} position: {str(e)}"
+            }
