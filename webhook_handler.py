@@ -68,7 +68,7 @@ class WebhookHandler:
                 }
 
             balance = float(usdt_balance['available'])
-            quantity = balance / 7
+            quantity = balance / 6
             logger.info(f"Available USDT balance: {balance} -> Trading quantity: {quantity}")
 
             # Validar símbolo
